@@ -275,6 +275,7 @@ def resize_crop(image):
 
 
 def cartoonize(load_folder, save_folder, model_path):
+    tf.reset_default_graph()
     tf.disable_eager_execution()
     input_photo = tf.placeholder(tf.float32, [1, None, None, 3])
     network_out = unet_generator(input_photo)
