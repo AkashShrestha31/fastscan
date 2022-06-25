@@ -274,7 +274,7 @@ def resize_crop(image):
     return image
 
 
-def cartoonize(load_folder, save_folder, model_path):
+def cartoonize( save_folder, model_path,name):
     tf.reset_default_graph()
     tf.disable_eager_execution()
     input_photo = tf.placeholder(tf.float32, [1, None, None, 3])
@@ -291,49 +291,29 @@ def cartoonize(load_folder, save_folder, model_path):
 
     sess.run(tf.global_variables_initializer())
     saver.restore(sess, tf.train.latest_checkpoint(model_path))
-    name_list = os.listdir(load_folder)
-    for name in tqdm(name_list):
-        try:
-            load_path = os.path.join(load_folder, name)
-            save_path = os.path.join(save_folder, name)
-            image = cv2.imread(load_path)
+    try:
+            save_path = os.path.join(save_folder, 'test.jpg')
+            image = name
             image = resize_crop(image)
             batch_image = image.astype(np.float32) / 127.5 - 1
             batch_image = np.expand_dims(batch_image, axis=0)
             output = sess.run(final_out, feed_dict={input_photo: batch_image})
             output = (np.squeeze(output) + 1) * 127.5
             output = np.clip(output, 0, 255).astype(np.uint8)
-            print(output.shape)
-            cv2.imwrite(save_path, output)
-        except:
-            print('cartoonize {} failed'.format(load_path))
+            retval, buffer = cv2.imencode('.jpg', output)
+            jpg_as_text = base64.b64encode(buffer)
+            return jpg_as_text
+    except:
+            print('cartoonize {} failed'.format(name))
 class renderCartoonizeImage(APIView):
     permission_classes = [AllowAny, ]
 
     def post(self, request):
+        nparr = np.fromstring(base64.urlsafe_b64decode(request.data['photo']), np.uint8)
+        img_np = cv2.imdecode(nparr, cv2.IMREAD_COLOR )
         model_path = 'saved_models'
-        load_folder = 'test_images'
         save_folder = 'cartoonized_images'
         if not os.path.exists(save_folder):
             os.mkdir(save_folder)
-        cartoonize(load_folder, save_folder, model_path)
-        # with open("imageToSave.png", "wb") as fh:
-        #     fh.write(base64.urlsafe_b64decode(request.data['photo']))
-        # originalmage = cv2.imread("imageToSave.png")
-        # originalmage = cv2.cvtColor(originalmage, cv2.COLOR_BGR2RGB)
-        # # check if the image is chosen
-        # grayScaleImage = cv2.cvtColor(originalmage, cv2.COLOR_BGR2GRAY)
-        # # applying median blur to smoothen an image
-        # smoothGrayScale = cv2.medianBlur(grayScaleImage, 5)
-        # # retrieving the edges for cartoon effect
-        # getEdge = cv2.adaptiveThreshold(smoothGrayScale, 255,
-        #                                 cv2.ADAPTIVE_THRESH_MEAN_C,
-        #                                 cv2.THRESH_BINARY, 9, 9)
-        # # applying bilateral filter to remove noise
-        # # and keep edge sharp as required
-        # colorImage = cv2.bilateralFilter(originalmage, 9, 300, 300)
-        #
-        # # masking edged image with our "BEAUTIFY" image
-        # cartoonImage = cv2.bitwise_and(colorImage, colorImage, mask=getEdge)
-        # cv2.imwrite('imageToSave.png', cv2.cvtColor(cartoonImage, cv2.COLOR_RGB2BGR))
-        return Response({"fafa":"fafaf"},status=status.HTTP_200_OK)
+        result=cartoonize( save_folder, model_path,img_np)
+        return Response({"output":result},status=status.HTTP_200_OK)
